@@ -1,0 +1,93 @@
+# =========================
+# Secrets / local config
+# =========================
+config.ini
+.env
+.env.*
+
+# =========================
+# Python cache / temp
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# =========================
+# Logs
+# =========================
+log/
+*.log
+
+# =========================
+# Data files (project data)
+# =========================
+data/
+mongodb-7.0.20/
+LLaMA-Factory-main/data/
+RAG-Retrieval/example_data/
+
+# =========================
+# Local models / checkpoints
+# =========================
+models/
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.gguf
+*.bin
+*.pkl
+*.db
+*.faiss
+
+# =========================
+# Fine-tuning outputs
+# =========================
+LLaMA-Factory-main/output/
+LLaMA-Factory-main/saves/
+LLaMA-Factory-main/checkpoints/
+RAG-Retrieval/rag_retrieval/train/**/output/
+RAG-Retrieval/rag_retrieval/train/**/checkpoints/
+
+# =========================
+# Test files / test artifacts
+# =========================
+tests/
+**/tests/
+test/
+**/test/
+**/test_*.py
+**/*_test.py
+data/ut/
+data/**/test*.json
+data/**/test*.jsonl
+data/**/test*.txt
+
+# =========================
+# Binary/media/doc artifacts
+# =========================
+*.zip
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.mp3
+*.mp4
+*.wav
+*.flac
+*.avi
+
+# =========================
+# OS/editor files
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
