@@ -5,6 +5,13 @@ from pathlib import Path
 # 自动推断项目根目录（constant.py 在 src/ 下，上一级即根目录）
 base_dir = str(Path(__file__).parent.parent) + os.sep
 
+# 自动加载 .env 文件（python-dotenv）
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env", override=False)
+except ImportError:
+    pass
+
 # 数据路径
 pdf_path = base_dir + "data/Tesla_Manual.pdf"
 test_doc_path = base_dir + "data/test_docs.txt"

@@ -4,6 +4,7 @@
 config.ini
 .env
 .env.*
+.claude/
 
 # =========================
 # Python cache / temp
