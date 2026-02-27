@@ -1,4 +1,5 @@
 import os
+import src.constant  # 触发 .env 加载
 from openai import OpenAI
 
 
@@ -21,11 +22,11 @@ LLM_CHAT_PROMPT = """
 如果参考条文中无法找到答案，请说"无答案"，不允许编造法律条文。
 """
 
+_api_key  = os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("DOUBAO_API_KEY")
+_base_url = os.environ.get("DEEPSEEK_BASE_URL") or os.environ.get("DOUBAO_BASE_URL")
+_model    = os.environ.get("DEEPSEEK_MODEL_NAME") or os.environ.get("DOUBAO_MODEL_NAME")
 
-llm_client = OpenAI(
-    api_key=os.environ['DOUBAO_API_KEY'],
-    base_url=os.environ['DOUBAO_BASE_URL']
-)
+llm_client = OpenAI(api_key=_api_key, base_url=_base_url)
 
 
 def request_chat(query, context, stream=False):
@@ -33,7 +34,7 @@ def request_chat(query, context, stream=False):
     prompt = LLM_CHAT_PROMPT.format(context=context, query=query) 
 
     completion = llm_client.chat.completions.create(
-        model=os.environ["DOUBAO_MODEL_NAME"],
+        model=_model,
         messages=[
             {"role": "system", "content": "你是一个专业的中国法律助手，熟悉中华人民共和国各类法律法规、司法解释及地方性法规。回答时必须以法律条文为依据，不得编造法律内容。"},
             {"role": "user", "content": prompt}
