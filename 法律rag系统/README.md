@@ -255,6 +255,9 @@ export DOUBAO_API_KEY="your_api_key"
 export DOUBAO_BASE_URL="https://ark.cn-beijing.volces.com/api/v3"
 export DOUBAO_MODEL_NAME="your_model_endpoint"
 
+# 硅基流动 API（embedding + reranker，注册：https://siliconflow.cn）
+export SILICONFLOW_API_KEY="your_siliconflow_api_key"
+
 # HuggingFace 镜像（国内加速）
 export HF_ENDPOINT=https://hf-mirror.com
 ```
@@ -272,28 +275,20 @@ nohup python src/client/semantic_chunk.py > log/semantic_chunk.log 2>&1 &
 sleep 10
 ```
 
-### 4. 下载模型
+### 4. 模型说明
 
-模型默认存放在项目根目录的 `models/` 下，与 `src/constant.py` 中的路径对应。
+BGE-M3（embedding）和 Reranker 均通过**硅基流动 API** 调用，无需本地下载大模型。
+
+只需下载用于评测的 text2vec 模型（约 400MB）：
 
 ```bash
-# BGE-M3 向量模型（embedding + 稀疏检索）
-modelscope download --model BAAI/bge-m3 --local_dir models/BAAI/bge-m3
-
-# Qwen3-Reranker-4B 精排模型
-modelscope download --model Qwen/Qwen3-Reranker-4B --local_dir models/Qwen3-Reranker-4B
-
-# text2vec 语义相似度评测模型
-modelscope download --model shibing624/text2vec-base-chinese --local_dir models/text2vec-base-chinese
+# text2vec 语义相似度评测模型（仅 final_score.py 需要）
+python -c "
+import os; os.environ['HF_ENDPOINT']='https://hf-mirror.com'
+from huggingface_hub import snapshot_download
+snapshot_download('shibing624/text2vec-base-chinese', local_dir='models/text2vec-base-chinese')
+"
 ```
-
-> HuggingFace 镜像加速（国内）：
-> ```bash
-> export HF_ENDPOINT=https://hf-mirror.com
-> huggingface-cli download BAAI/bge-m3 --local-dir models/BAAI/bge-m3
-> huggingface-cli download Qwen/Qwen3-Reranker-4B --local-dir models/Qwen3-Reranker-4B
-> huggingface-cli download shibing624/text2vec-base-chinese --local-dir models/text2vec-base-chinese
-> ```
 
 ---
 
