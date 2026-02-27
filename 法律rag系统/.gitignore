@@ -28,9 +28,8 @@ log/
 # Data files (project data)
 # =========================
 data/
+LegalBench-RAG/
 mongodb-7.0.20/
-LLaMA-Factory-main/data/
-RAG-Retrieval/example_data/
 
 # =========================
 # Local models / checkpoints
@@ -48,13 +47,10 @@ models/
 *.faiss
 
 # =========================
-# Fine-tuning outputs
+# Fine-tuning frameworks（当前项目未使用，仅作进阶微调参考）
 # =========================
-LLaMA-Factory-main/output/
-LLaMA-Factory-main/saves/
-LLaMA-Factory-main/checkpoints/
-RAG-Retrieval/rag_retrieval/train/**/output/
-RAG-Retrieval/rag_retrieval/train/**/checkpoints/
+LLaMA-Factory-main/
+RAG-Retrieval/
 
 # =========================
 # Test files / test artifacts

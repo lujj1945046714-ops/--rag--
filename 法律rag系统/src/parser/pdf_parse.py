@@ -98,6 +98,10 @@ def texts_split(raw_docs: list[Document]) -> list[Document]:
 
         # 语义切分
         grouped_chunks = request_semantic_chunk(doc.page_content, group_size=_semantic_group_size)
+        if isinstance(grouped_chunks, str):
+            grouped_chunks = [grouped_chunks]
+        if not grouped_chunks:
+            grouped_chunks = [doc.page_content]
 
         # 父doc
         parent_docs = []
@@ -155,5 +159,4 @@ def save_2_mongo(split_docs):
             {"$set": doc_record.model_dump()},
             upsert=True
         )
-
 

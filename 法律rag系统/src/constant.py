@@ -1,6 +1,9 @@
-# 路径都以 infer.py 为参考路径
+# 路径都以项目根目录为参考路径
+import os
+from pathlib import Path
 
-base_dir = "/root/autodl-tmp/RAG/"
+# 自动推断项目根目录（constant.py 在 src/ 下，上一级即根目录）
+base_dir = str(Path(__file__).parent.parent) + os.sep
 
 # 数据路径
 pdf_path = base_dir + "data/Tesla_Manual.pdf"
@@ -10,6 +13,8 @@ image_save_dir = base_dir + "data/saved_images"
 raw_docs_path = base_dir + "data/processed_docs/raw_docs.pkl"
 clean_docs_path = base_dir + "data/processed_docs/clean_docs.pkl"
 split_docs_path = base_dir + "data/processed_docs/split_docs.pkl"
+legal_raw_docs_path = base_dir + "data/processed_docs/legal_raw_docs.pkl"
+legal_split_docs_path = base_dir + "data/processed_docs/legal_split_docs.pkl"
 
 # 索引路径
 bm25_pickle_path = base_dir + "data/saved_index/bm25retriever.pkl"

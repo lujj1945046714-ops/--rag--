@@ -16,22 +16,19 @@ from tqdm import tqdm
 
 
 from src.retriever.bm25_retriever import BM25
-from src.retriever.tfidf_retriever import TFIDF
-from src.retriever.faiss_retriever import FaissRetriever
-from src.retriever.milvus_retriever import MilvusRetriever 
+from src.retriever.milvus_retriever import MilvusRetriever
 from src.client.llm_chat_client import request_chat
 from src.client.llm_hyde_client import request_hyde
-from src.reranker.bge_m3_reranker import BGEM3ReRanker 
-from src.constant import bge_reranker_tuned_model_path
-from src.constant import qwen3_reranker_model_path 
-from src.constant import text2vec_model_path 
+from src.reranker.qwen3_reranker import Qwen3ReRanker
+from src.constant import qwen3_4b_reranker_model_path
+from src.constant import text2vec_model_path
 from src.utils import merge_docs, post_processing
 
 
 # warmstart
 bm25_retriever = BM25(docs=None, retrieve=True)
-milvus_retriever = MilvusRetriever(docs=None, retrieve=True) 
-bge_m3_reranker = BGEM3ReRanker(model_path=bge_reranker_tuned_model_path)
+milvus_retriever = MilvusRetriever(docs=None, retrieve=True)
+qwen3_reranker = Qwen3ReRanker(model_path=qwen3_4b_reranker_model_path)
 milvus_retriever.retrieve_topk("这是一条测试数据", topk=3)
 simModel = SentenceModel(model_name_or_path=text2vec_model_path, device='cuda:0')
 
@@ -94,7 +91,7 @@ for item in test_qa_pairs:
         bm25_docs = bm25_retriever.retrieve_topk(query, topk=BM25_RETRIEVE_SIZE)
         milvus_docs = milvus_retriever.retrieve_topk(query, topk=MILVUS_RETRIEVE_SIZE)
     merged_docs = merge_docs(bm25_docs, milvus_docs)
-    ranked_docs = bge_m3_reranker.rank(query, merged_docs, topk=RERANK_SIZE)
+    ranked_docs = qwen3_reranker.rank(query, merged_docs, topk=RERANK_SIZE)
     context = "\n".join([str(idx+1) + "." + doc.page_content for idx, doc in enumerate(ranked_docs)])
     response = request_chat(query, context)
     answer = post_processing(response, ranked_docs)

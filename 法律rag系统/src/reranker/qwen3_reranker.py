@@ -6,33 +6,39 @@
 
 import warnings
 import torch
-from transformers import AutoModel, AutoTokenizer, AutoModelForCausalLM
-from langchain_core.documents import Document
+from transformers import AutoTokenizer, AutoModelForCausalLM
 warnings.filterwarnings("ignore")
 
 
 class Qwen3ReRanker(object):
-    def __init__(self, model_path, max_length=4096):
+    def __init__(self, model_path, max_length=4096, batch_size=4):
         # 加载 rerank 模型
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side='left')
         self.model = AutoModelForCausalLM.from_pretrained(model_path).cuda().eval()
 
-        self.token_false_id = self.tokenizer.convert_tokens_to_ids("no")
-        self.token_true_id = self.tokenizer.convert_tokens_to_ids("yes")
+        self.token_false_id = self.tokenizer("no", add_special_tokens=False).input_ids[0]
+        self.token_true_id = self.tokenizer("yes", add_special_tokens=False).input_ids[0]
         self.max_length = max_length 
+        self.batch_size = batch_size
 
         prefix = "<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the Instruct provided. Note that the answer can only be \"yes\" or \"no\".<|im_end|>\n<|im_start|>user\n"
         suffix = "<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
         self.prefix_tokens = self.tokenizer.encode(prefix, add_special_tokens=False)
         self.suffix_tokens = self.tokenizer.encode(suffix, add_special_tokens=False)
                 
-        self.task = 'Given a web search query, retrieve relevant passages that answer the query'
+        self.task = (
+            'Given a legal question in Chinese, retrieve the most relevant Chinese legal articles, '
+            'provisions, or case analyses that directly answer or apply to the question. '
+            'Prefer documents that cite specific law names and article numbers. '
+            'Higher-level laws (national law > administrative regulation > local regulation) '
+            'should be ranked higher when content relevance is equal.'
+        )
 
 
     def format_instruction(self, instruction, query, doc):
         if instruction is None:
-            instruction = 'Given a web search query, retrieve relevant passages that answer the query'
+            instruction = self.task
         output = "<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {doc}".format(instruction=instruction,query=query, doc=doc)
         return output
 
@@ -60,44 +66,35 @@ class Qwen3ReRanker(object):
 
     def rank(self, query, candidate_docs, topk=10):
         # 输入文档对，返回每一对(query, doc)的相关得分，并从大到小排序
-        """
-        queries = [query] * len(candidate_docs)
-        documents = [doc.page_content for doc in candidate_docs]
+        if not candidate_docs:
+            return []
 
-        # 如果显存不足, 可以改为单条预测
-        """
+        pairs = [
+            self.format_instruction(self.task, query, doc.page_content)
+            for doc in candidate_docs
+        ]
+
         scores = []
-        for docc in candidate_docs:
-            documents = [docc.page_content]
-            queries = [query]
-
-            pairs = [self.format_instruction(self.task, query, doc) for query, doc in zip(queries, documents)]
-
-            # Tokenize the input texts
-            inputs = self.process_inputs(pairs)
-            score = self.compute_logits(inputs)
-            scores.append(score)
-
-        pairs = [self.format_instruction(self.task, query, doc) for query, doc in zip(queries, documents)]
-
-        # Tokenize the input texts
-        inputs = self.process_inputs(pairs)
-        scores = self.compute_logits(inputs)
+        for start in range(0, len(pairs), self.batch_size):
+            batch_pairs = pairs[start : start + self.batch_size]
+            inputs = self.process_inputs(batch_pairs)
+            batch_scores = self.compute_logits(inputs)
+            scores.extend(batch_scores)
 
         response = [
             doc
             for score, doc in sorted(
                 zip(scores, candidate_docs), reverse=True, key=lambda x: x[0]
             )
-            ][:topk]
+        ][:topk]
         return response
 
 
 if __name__ == "__main__":
     qwen3_reranker = "./models/Qwen3-Reranker-4B"
-    bge_rerank = Qwen3ReRanker(qwen3_reranker)
+    qwen3_rerank = Qwen3ReRanker(qwen3_reranker)
     query = "今天天气怎么样"
-    docs = ["你好", "今天天气不错", "今天有雨吗"]
-    docs = [Document(page_content=doc, metadata={}) for doc in docs]
-    response = bge_rerank.rank(query, docs)
+    from langchain_core.documents import Document
+    docs = [Document(page_content=doc, metadata={}) for doc in ["你好", "今天天气不错", "今天有雨吗"]]
+    response = qwen3_rerank.rank(query, docs)
     print(response)

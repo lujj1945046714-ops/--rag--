@@ -7,14 +7,14 @@ from src.retriever.faiss_retriever import FaissRetriever
 from src.retriever.milvus_retriever import MilvusRetriever 
 from src.client.llm_chat_client import request_chat
 from src.client.llm_hyde_client import request_hyde
-from src.reranker.bge_m3_reranker import BGEM3ReRanker 
-from src.constant import bge_reranker_tuned_model_path
+from src.reranker.qwen3_reranker import Qwen3ReRanker
+from src.constant import qwen3_4b_reranker_model_path
 from src.utils import merge_docs, post_processing
 
 # warmstart
 bm25_retriever = BM25(docs=None, retrieve=True)
 milvus_retriever = MilvusRetriever(docs=None, retrieve=True) 
-bge_m3_reranker = BGEM3ReRanker(model_path=bge_reranker_tuned_model_path)
+qwen3_reranker = Qwen3ReRanker(model_path=qwen3_4b_reranker_model_path)
 milvus_retriever.retrieve_topk("这是一条测试数据", topk=3)
 
 
@@ -46,7 +46,7 @@ while True:
 
 
     # 精排 
-    ranked_docs = bge_m3_reranker.rank(query, merged_docs, topk=5)
+    ranked_docs = qwen3_reranker.rank(query, merged_docs, topk=5)
     print(ranked_docs)
     print("="*100)
 
