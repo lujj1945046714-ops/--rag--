@@ -72,6 +72,14 @@
     │
     ▼
 ┌─────────────────────────────────────────┐
+│           问题路由 + 查询改写            │
+│  route_and_rewrite()                    │
+│  · 非法律问题 → 直接返回"无答案"        │
+│  · 法律问题 → 改写为检索友好查询        │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
 │              检索层                      │
 │  BM25 召回（topk=10）                   │
 │       +                                 │
@@ -79,13 +87,16 @@
 │       ↓                                 │
 │  merge_docs（去重 + Parent-Child 召回） │
 │       ↓                                 │
-│  Qwen3-Reranker-4B 精排（topk=5）      │
+│  BGE-Reranker-v2-m3 精排（topk=8）     │
+│       ↓                                 │
+│  分数过滤（top_score < 0.3 → 无答案）  │
 └─────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────┐
 │              生成层                      │
 │  法律专用 Prompt（引用条文 + 层级说明） │
+│  无关内容处理指令（防幻觉）             │
 │  大语言模型（豆包/DeepSeek/GPT-4）      │
 └─────────────────────────────────────────┘
     │
@@ -162,7 +173,24 @@ Higher-level laws (national law > administrative regulation > local regulation)
 should be ranked higher when content relevance is equal.
 ```
 
-### 5. 法理约束生成
+### 5. 问题路由 + 查询改写
+
+一次 LLM 调用同时完成两个任务：
+
+1. **路由判断**：识别非法律问题（天气、数学等），直接返回"无答案"，不进入检索流程，节省资源
+2. **查询改写**：将口语化问题改写为检索友好的法律关键词查询（≤20字），提升 BM25 和向量检索的召回质量
+
+```python
+# 示例
+输入：  "我被公司开除了怎么办"
+改写后："劳动合同违法解除赔偿金"
+```
+
+### 6. Rerank 分数过滤
+
+精排后若最高相关分 < 0.3，直接返回"无答案"，避免将低质量检索结果送入 LLM 生成错误答案。API 降级时自动跳过过滤，保证可用性。
+
+### 7. 法理约束生成
 
 LLM 生成阶段强制要求：
 1. 引用相关条文原文（格式：《法律名称》第X条）
@@ -216,6 +244,7 @@ LLM 生成阶段强制要求：
 │   │   └── qwen3_reranker.py       # Qwen3 精排模型
 │   ├── client/
 │   │   ├── llm_chat_client.py      # LLM 问答客户端（法律专用 prompt）
+│   │   ├── llm_router_client.py    # 问题路由 + 查询改写（route_and_rewrite）
 │   │   └── llm_hyde_client.py      # HyDE 假设文档生成
 │   └── utils.py                    # merge_docs（Parent-Child 召回）
 │
@@ -400,15 +429,6 @@ python final_score.py
 - **语义相似度 + 关键词 Jaccard 加权得分**（text2vec）
 - **LLMContextRecall**：上下文召回率（RAGAS）
 - **LLMContextPrecisionWithReference**：上下文精确率（RAGAS）
-
-### 评测结果
-
-| 切分策略 | chunk数 | Precision | Recall |
-|---------|--------|-----------|--------|
-| 固定 512 token 切割 | 172 | 0.2116 | 0.8365 |
-| legal_texts_split（法律专用） | 57 | 0.0891 | **1.0000** |
-
-> 法律 RAG 场景中 Recall 优先于 Precision：漏掉关键条文会导致错误答案，多返回背景内容由 LLM 自行过滤。
 
 ---
 

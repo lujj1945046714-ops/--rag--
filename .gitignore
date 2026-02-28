@@ -1,0 +1,4 @@
+# Claude Code 工具文件
+.claude/
+.claudeignore
+claude.md
