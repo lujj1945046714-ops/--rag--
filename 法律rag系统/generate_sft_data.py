@@ -53,7 +53,7 @@ for item in tqdm(test_qa_pairs):
         bm25_docs = bm25_retriever.retrieve_topk(query, topk=5)
         milvus_docs = milvus_retriever.retrieve_topk(query, topk=10)
         merged_docs = merge_docs(bm25_docs, milvus_docs)
-        ranked_docs = qwen3_reranker.rank(query, merged_docs, topk=5)
+        ranked_docs, _ = qwen3_reranker.rank(query, merged_docs, topk=5)
         context = "\n".join([str(idx+1) + "." + doc.page_content for idx, doc in enumerate(ranked_docs)])
         response = request_chat(query, context)
         answer = post_processing(response, ranked_docs)

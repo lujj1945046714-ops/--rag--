@@ -33,7 +33,7 @@ class Qwen3ReRanker:
 
     def rank(self, query, candidate_docs, topk=10):
         if not candidate_docs:
-            return []
+            return [], 0.0
 
         documents = [doc.page_content for doc in candidate_docs]
 
@@ -55,11 +55,13 @@ class Qwen3ReRanker:
             results = resp.json().get("results", [])
         except Exception as e:
             print(f"[Reranker] API 调用失败: {e}，降级为原始顺序")
-            return candidate_docs[:topk]
+            return candidate_docs[:topk], None  # None 表示降级，调用方应跳过阈值过滤
 
         # results: [{"index": int, "relevance_score": float}, ...]
         ranked = sorted(results, key=lambda x: x["relevance_score"], reverse=True)
-        return [candidate_docs[r["index"]] for r in ranked[:topk]]
+        top_docs = [candidate_docs[r["index"]] for r in ranked[:topk]]
+        top_score = ranked[0]["relevance_score"] if ranked else 0.0
+        return top_docs, top_score
 
 
 if __name__ == "__main__":

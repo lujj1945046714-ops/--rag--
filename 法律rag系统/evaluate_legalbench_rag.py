@@ -261,7 +261,7 @@ def maybe_rerank_with_qwen3(
 
     reranker = Qwen3ReRanker(model_path=model_path)
     docs = [_Doc(page_content=chunk.text, metadata={"chunk": chunk}) for chunk in candidate_chunks]
-    ranked_docs = reranker.rank(query, docs, topk=topk)
+    ranked_docs, _ = reranker.rank(query, docs, topk=topk)
     return [doc.metadata["chunk"] for doc in ranked_docs]
 
 

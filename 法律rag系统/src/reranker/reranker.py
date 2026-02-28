@@ -18,6 +18,6 @@ class RerankerBase(ABC):
         self.max_length = max_length
 
     @abstractmethod
-    def rank(self, query: str, candidate_docs: List[str], top_k=10)  -> List[Tuple[float, str]]:
+    def rank(self, query: str, candidate_docs: List, top_k=10) -> Tuple[List, float]:
         # 当尝试实例化该抽象基类时抛出未实现错误
         raise NotImplementedError

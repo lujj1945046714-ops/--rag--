@@ -19,7 +19,7 @@ from tqdm import tqdm
 from src.retriever.bm25_retriever import BM25
 from src.retriever.milvus_retriever import MilvusRetriever
 from src.client.llm_chat_client import request_chat
-from src.client.llm_hyde_client import request_hyde
+from src.client.llm_router_client import route_and_rewrite
 from src.reranker.qwen3_reranker import Qwen3ReRanker
 from src.constant import qwen3_4b_reranker_model_path
 from src.constant import text2vec_model_path
@@ -31,12 +31,12 @@ bm25_retriever = BM25(docs=None, retrieve=True)
 milvus_retriever = MilvusRetriever(docs=None, retrieve=True)
 qwen3_reranker = Qwen3ReRanker(model_path=qwen3_4b_reranker_model_path)
 milvus_retriever.retrieve_topk("这是一条测试数据", topk=3)
-simModel = SentenceModel(model_name_or_path=text2vec_model_path, device='cuda:0')
+simModel = SentenceModel(model_name_or_path=text2vec_model_path, device='cpu')
 
-BM25_RETRIEVE_SIZE = 5
-MILVUS_RETRIEVE_SIZE = 10
-RERANK_SIZE = 5
-HYDE = 0
+BM25_RETRIEVE_SIZE = 10
+MILVUS_RETRIEVE_SIZE = 20
+RERANK_SIZE = 8
+RERANK_SCORE_THRESHOLD = 0.3
 
 
 def calc_jaccard(list_a, list_b, threshold=0.3):
@@ -83,17 +83,33 @@ test_qa_pairs = json.load(fd)
 result = []
 for item in test_qa_pairs:
     query = item["question"].strip()
-    if HYDE:
-        hyde_query = request_hyde(query) 
-        hyde_query = query + "\n" + hyde_query 
-        bm25_docs = bm25_retriever.retrieve_topk(hyde_query, topk=BM25_RETRIEVE_SIZE)
-        milvus_docs = milvus_retriever.retrieve_topk(hyde_query, topk=MILVUS_RETRIEVE_SIZE)
-    else:
-        bm25_docs = bm25_retriever.retrieve_topk(query, topk=BM25_RETRIEVE_SIZE)
-        milvus_docs = milvus_retriever.retrieve_topk(query, topk=MILVUS_RETRIEVE_SIZE)
+
+    # 一次调用：路由判断 + 查询改写
+    route_result = route_and_rewrite(query)
+    if not route_result["is_legal"]:
+        item["pred"] = {"answer": "无答案", "cite_pages": [], "related_images": [], "filter_reason": "non_legal"}
+        item["context"] = ""
+        result.append(item)
+        continue
+    search_query = route_result["rewritten_query"]
+
+    # 检索（父文档召回由 merge_docs 自动处理）
+    bm25_docs = bm25_retriever.retrieve_topk(search_query, topk=BM25_RETRIEVE_SIZE)
+    milvus_docs = milvus_retriever.retrieve_topk(search_query, topk=MILVUS_RETRIEVE_SIZE)
     merged_docs = merge_docs(bm25_docs, milvus_docs)
-    ranked_docs = qwen3_reranker.rank(query, merged_docs, topk=RERANK_SIZE)
-    context = "\n".join([str(idx+1) + "." + doc.page_content for idx, doc in enumerate(ranked_docs)])
+
+    # Rerank + 分数过滤（top_score=None 为 API 降级，跳过阈值）
+    ranked_docs, top_score = qwen3_reranker.rank(query, merged_docs, topk=RERANK_SIZE)
+    if top_score is not None and top_score < RERANK_SCORE_THRESHOLD:
+        item["pred"] = {"answer": "无答案", "cite_pages": [], "related_images": [], "filter_reason": "rerank_score_low"}
+        item["context"] = ""
+        result.append(item)
+        continue
+
+    MAX_CHARS_PER_DOC = 3000
+    MAX_TOTAL_CHARS = 60000
+    doc_texts = [str(idx+1) + "." + doc.page_content[:MAX_CHARS_PER_DOC] for idx, doc in enumerate(ranked_docs)]
+    context = "\n".join(doc_texts)[:MAX_TOTAL_CHARS]
     response = request_chat(query, context)
     answer = post_processing(response, ranked_docs)
     print("问题：", query)
@@ -108,7 +124,10 @@ with open("data/qa_pairs/test_qa_pair_pred.json", "w") as fw:
 
 
 with open("data/qa_pairs/test_qa_pair_pred.json") as fw:
-    result = json.load(fw) 
+    result = json.load(fw)
+
+filtered = sum(1 for item in result if item.get("context") == "")
+print(f"被过滤（路由/rerank）item 数：{filtered}，参与正常回答 item 数：{len(result) - filtered}")
 
 results = report_score(result)
 final_score = np.mean([item["score"] for item in results])
