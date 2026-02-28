@@ -7,7 +7,7 @@ import os
 import pickle
 import jieba
 import hashlib
-from langchain.schema import Document
+from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 
 from src.constant import bm25_pickle_path, stopwords_path
@@ -53,7 +53,11 @@ class BM25(object):
         # query_tokens = jieba.cut_for_search(query)
         # query_tokens_filter = [t for t in query_tokens if t not in _stopwords]
         # query = " ".join(query_tokens_filter)
-        ans_docs = self.retriever.get_relevant_documents(query)
+        try:
+            ans_docs = self.retriever.invoke(query)
+        except AttributeError:
+            # 兼容旧版本 langchain
+            ans_docs = self.retriever._get_relevant_documents(query)
         return ans_docs
 
 

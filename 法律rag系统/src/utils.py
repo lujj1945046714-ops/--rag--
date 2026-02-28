@@ -50,10 +50,11 @@ def post_processing(response, docs):
     for index in cites:
         if index > len(docs):
             continue
-        images = docs[index-1].metadata["images_info"]
-        pages.append(docs[index-1].metadata["page"])
+        images = docs[index-1].metadata.get("images_info", [])
+        page = docs[index-1].metadata.get("page", index)
+        pages.append(page)
         for image in images:
-            if image["title"]:
+            if image.get("title"):
                 related_images.append(image)
     pages = sorted(list(set(pages)))
     return {
