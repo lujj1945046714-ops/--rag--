@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
-# Reranker via SiliconFlow API (BAAI/bge-reranker-v2-m3)
-# 替代本地 Qwen3-Reranker-4B，接口保持不变
+# Reranker via SiliconFlow API (Qwen/Qwen3-Reranker-4B)
+# Qwen3-Reranker 通过 chat completions + logprobs 打分，接口与旧版完全兼容
 
 import os
-import requests
+import math
+import concurrent.futures
+from openai import OpenAI
 from langchain_core.documents import Document
 
 
 SILICONFLOW_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
-RERANK_API_URL = "https://api.siliconflow.cn/v1/rerank"
-RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
+RERANK_MODEL = "Qwen/Qwen3-Reranker-4B"
+RERANK_BASE_URL = "https://api.siliconflow.cn/v1"
 
 TASK = (
     "Given a legal question in Chinese, retrieve the most relevant Chinese legal articles, "
@@ -19,48 +21,65 @@ TASK = (
     "should be ranked higher when content relevance is equal."
 )
 
+_SYSTEM_PROMPT = (
+    'Judge whether the Document meets the requirements based on the Query and the Instruct provided. '
+    'Note that the answer can only be "yes" or "no".'
+)
+
+_client = OpenAI(api_key=SILICONFLOW_API_KEY, base_url=RERANK_BASE_URL)
+
+
+def _score(query: str, doc_text: str) -> float:
+    """对单个文档打分，返回 [0, 1] 相关度分数。"""
+    user_content = f"<Instruct>: {TASK}\n\n<Query>: {query}\n\n<Document>: {doc_text}"
+    try:
+        resp = _client.chat.completions.create(
+            model=RERANK_MODEL,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user",   "content": user_content},
+            ],
+            max_tokens=1,
+            logprobs=True,
+            top_logprobs=20,
+            temperature=0,
+            extra_body={"enable_thinking": False},
+        )
+        top_lp = resp.choices[0].logprobs.content[0].top_logprobs
+        lp_map = {item.token.strip().lower(): item.logprob for item in top_lp}
+        yes_lp = lp_map.get("yes", -100.0)
+        no_lp  = lp_map.get("no",  -100.0)
+        return math.exp(yes_lp) / (math.exp(yes_lp) + math.exp(no_lp))
+    except Exception as e:
+        print(f"[Reranker] 评分失败: {e}")
+        return 0.0
+
 
 class Qwen3ReRanker:
     """
-    调用硅基流动 Reranker API 进行精排，接口与本地版本完全兼容。
-    模型：BAAI/bge-reranker-v2-m3
+    调用硅基流动 Qwen3-Reranker-4B 进行精排。
+    使用 chat completions + logprobs 对每个文档打分，线程池并发加速。
+    接口与旧版完全兼容：rank() 返回 (List[Document], Optional[float])
     """
 
     def __init__(self, model_path=None, max_length=4096, batch_size=32):
-        # model_path 参数保留以兼容调用方，API 模式下忽略
-        self.api_key = SILICONFLOW_API_KEY
-        self.max_length = max_length
+        self.max_workers = 8  # 并发线程数
 
-    def rank(self, query, candidate_docs, topk=10):
+    def rank(self, query: str, candidate_docs, topk: int = 10):
         if not candidate_docs:
             return [], 0.0
 
-        documents = [doc.page_content for doc in candidate_docs]
+        # 并发对所有文档打分
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [
+                executor.submit(_score, query, doc.page_content)
+                for doc in candidate_docs
+            ]
+            scores = [f.result() for f in futures]
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": RERANK_MODEL,
-            "query": query,
-            "documents": documents,
-            "top_n": min(topk, len(documents)),
-            "return_documents": False,
-        }
-
-        try:
-            resp = requests.post(RERANK_API_URL, json=payload, headers=headers, timeout=30)
-            resp.raise_for_status()
-            results = resp.json().get("results", [])
-        except Exception as e:
-            print(f"[Reranker] API 调用失败: {e}，降级为原始顺序")
-            return candidate_docs[:topk], None  # None 表示降级，调用方应跳过阈值过滤
-
-        # results: [{"index": int, "relevance_score": float}, ...]
-        ranked = sorted(results, key=lambda x: x["relevance_score"], reverse=True)
-        top_docs = [candidate_docs[r["index"]] for r in ranked[:topk]]
-        top_score = ranked[0]["relevance_score"] if ranked else 0.0
+        ranked = sorted(zip(scores, candidate_docs), key=lambda x: x[0], reverse=True)
+        top_docs  = [doc for _, doc in ranked[:topk]]
+        top_score = ranked[0][0] if ranked else 0.0
         return top_docs, top_score
 
 
@@ -72,4 +91,7 @@ if __name__ == "__main__":
         Document(page_content="今天天气不错", metadata={}),
         Document(page_content="《劳动法》第四十一条规定每月加班不超过三十六小时", metadata={}),
     ]
-    print(reranker.rank(query, docs, topk=2))
+    result, score = reranker.rank(query, docs, topk=2)
+    print(f"top_score: {score:.4f}")
+    for doc in result:
+        print(doc.page_content)

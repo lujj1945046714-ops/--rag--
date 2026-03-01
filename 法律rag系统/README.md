@@ -87,7 +87,7 @@
 │       ↓                                 │
 │  merge_docs（去重 + Parent-Child 召回） │
 │       ↓                                 │
-│  BGE-Reranker-v2-m3 精排（topk=8）     │
+│  Qwen3-Reranker-4B 精排（topk=8）      │
 │       ↓                                 │
 │  分数过滤（top_score < 0.3 → 无答案）  │
 └─────────────────────────────────────────┘
@@ -207,7 +207,7 @@ LLM 生成阶段强制要求：
 | 向量检索 | Milvus-Lite + BGE-M3（dense + sparse + RRF） |
 | 关键词检索 | BM25（rank-bm25） |
 | 父子文档存储 | MongoDB 7.0 |
-| 精排模型 | Qwen3-Reranker-4B |
+| 精排模型 | Qwen3-Reranker-4B（chat completions + logprobs） |
 | 嵌入模型 | BGE-M3 / Qwen3-Embedding-0.6B |
 | 大语言模型 | 豆包 / DeepSeek / GPT-4（OpenAI 兼容接口） |
 | RAG 评测 | RAGAS（LLMContextRecall + LLMContextPrecisionWithReference） |
